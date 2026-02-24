@@ -1,0 +1,175 @@
+plugins {
+    id 'java'
+    id 'war'
+}
+
+compileJava {
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+    options.annotationProcessorPath = configurations.annotationProcessor
+}
+
+group = 'it.agrimontana.salesforce'
+version = '1.0.0'
+
+repositories {
+    flatDir {
+        dirs 'libs'
+    }
+    mavenCentral()
+}
+
+dependencies {
+    providedCompile 'jakarta.platform:jakarta.jakartaee-web-api:10.0.0'
+    implementation name: 'jt400-20.0.6'
+    implementation 'org.jboss.logging:jboss-logging:3.5.0.Final'
+    // lombok
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    implementation 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+    // jsonB integrato in wildfly
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+
+    // MicroProfile OpenAPI API (solo interfacce)
+    providedCompile 'org.eclipse.microprofile.openapi:microprofile-openapi-api:3.1'
+    // MicroProfile Config API (per @ConfigProperty injection)
+    providedCompile 'org.eclipse.microprofile.config:microprofile-config-api:3.1'
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+war {
+    archiveFileName = "sf.war"
+}
+
+// ============================================
+// CONFIGURAZIONE MULTI-AMBIENTE (TEST / PROD)
+// ============================================
+
+ext {
+    environments = [
+            test: [
+                    sshHost: 'ec2-18-102-105-31.eu-south-1.compute.amazonaws.com',
+                    sshUser: 'ubuntu',
+                    sshKey: '~/.ssh/AWS-LAB.pem',
+                    wildflyPath: '/home/ubuntu/wildfly/wildfly37/standalone/deployments',
+                    configFile: 'microprofile-config-test.properties',
+                    standaloneXml: 'standalone-microprofile-test.xml'
+            ],
+            prod: [
+                    sshHost: '10.0.0.91',
+                    sshUser: 'codestorm',
+                    wildflyPath: '/opt/wildfly/standalone/deployments',
+                    configFile: 'microprofile-config-prod.properties',
+                    standaloneXml: 'standalone-microprofile-prod.xml'
+            ]
+    ]
+}
+
+// Task per build con ambiente specifico
+task buildTest(type: War) {
+    dependsOn classes
+    archiveFileName = "sf.war"
+    from(sourceSets.main.output)
+    from('src/main/resources') {
+        include 'microprofile-config-test.properties'
+        into 'META-INF'
+        rename 'microprofile-config-test.properties', 'microprofile-config.properties'
+    }
+    from('src/main/webapp')
+}
+
+task buildProd(type: War) {
+    dependsOn classes
+    archiveFileName = "sf.war"
+    from(sourceSets.main.output)
+    from('src/main/resources') {
+        include 'microprofile-config-prod.properties'
+        into 'META-INF'
+        rename 'microprofile-config-prod.properties', 'microprofile-config.properties'
+    }
+    from('src/main/webapp')
+}
+
+// Task per deploy via SSH
+task deployTest {
+    dependsOn buildTest
+    doLast {
+        def env = environments.test
+        exec {
+            commandLine 'scp', '-i', env.sshKey, "${buildDir}/libs/sf.war",
+                    "${env.sshUser}@${env.sshHost}:${env.wildflyPath}/"
+        }
+        println "Deployed to TEST: ${env.sshHost}"
+    }
+}
+
+task deployProd {
+    dependsOn buildProd
+    doLast {
+        def env = environments.prod
+        def password = "AndareTrovato99)"
+
+        exec {
+            commandLine '/opt/homebrew/bin/sshpass', '-p', password,
+                    'scp',
+                    "${buildDir}/libs/sf.war",
+                    "${env.sshUser}@${env.sshHost}:/tmp/sf.war"
+        }
+
+        exec {
+            commandLine '/opt/homebrew/bin/sshpass', '-p', password,
+                    'ssh',
+                    "${env.sshUser}@${env.sshHost}",
+                    "echo '${password}' | sudo -S mv /tmp/sf.war ${env.wildflyPath}/sf.war && " +
+                            "echo '${password}' | sudo -S chown wildfly:wildfly ${env.wildflyPath}/sf.war"
+        }
+
+        println "Deployed to PROD: ${env.sshHost}"
+    }
+}
+
+
+// Task per copiare standalone.xml sul server
+task deployConfigTest {
+    doLast {
+        def env = environments.test
+        exec {
+            commandLine 'scp', '-i', env.sshKey, 'standalone-microprofile-test.xml',
+                    "${env.sshUser}@${env.sshHost}:/home/ubuntu/wildfly/wildfly37/standalone/configuration/standalone-microprofile.xml"
+        }
+        println "Config deployed to TEST: ${env.sshHost}"
+    }
+}
+
+task deployConfigProd {
+    doLast {
+        def env = environments.prod
+        def password = "AndareTrovato99)"
+
+        // Copia in /tmp
+        exec {
+            commandLine '/opt/homebrew/bin/sshpass', '-p', password, 'scp',
+                    'standalone-microprofile-prod.xml',
+                    "${env.sshUser}@${env.sshHost}:/tmp/standalone-microprofile.xml"
+        }
+
+        // Sposta con sudo
+        exec {
+            commandLine '/opt/homebrew/bin/sshpass', '-p', password, 'ssh',
+                    "${env.sshUser}@${env.sshHost}",
+                    "echo '${password}' | sudo -S mv /tmp/standalone-microprofile.xml /opt/wildfly/standalone/configuration/standalone-microprofile.xml"
+        }
+
+        exec {
+            commandLine '/opt/homebrew/bin/sshpass', '-p', password, 'ssh',
+                    "${env.sshUser}@${env.sshHost}",
+                    "echo '${password}' | sudo -S chown wildfly:wildfly /opt/wildfly/standalone/configuration/standalone-microprofile.xml"
+        }
+
+        println "Config deployed to PROD: ${env.sshHost}"
+    }
+}

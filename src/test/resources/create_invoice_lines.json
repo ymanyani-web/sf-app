@@ -1,0 +1,62 @@
+{
+  "allOrNone": true,
+  "compositeRequest": [
+    {
+      "method": "PATCH",
+      "url": "/services/data/v54.0/sobjects/InvoiceLineItem__c/ERPKey__c/2023-F-1000-322268-3000",
+      "referenceId": "refInvoiceItem1",
+      "body": {
+        "Invoice__c": "a023N00000BhrYNQAZ",
+        "Prodotto__c": "01t7Q000005KisDQAS",
+        "TipoRigo__c": "VENDITA",
+        "Description__c": "ESPOS. LATT. 45g RETROCHIC ASS. N 18",
+        "Unit_di_misura__c": "CON",
+        "Quantita__c": "42.0",
+        "Price__c": "42.66",
+        "Discount1__c": "10.0",
+        "Discount2__c": "0.0",
+        "Discount3__c": "0.0",
+        "ValoreRigo__c": "0.0",
+        "Discount4__c": "0.0"
+      }
+    },
+    {
+      "method": "PATCH",
+      "url": "/services/data/v54.0/sobjects/InvoiceLineItem__c/ERPKey__c/2023-F-1001-322269-3000",
+      "referenceId": "refInvoiceItem2",
+      "body": {
+        "Invoice__c": "a023N00000BhrYNQAZ",
+        "Prodotto__c": "01t7Q000005KisGQAS",
+        "TipoRigo__c": "VENDITA",
+        "Description__c": "ESP.SCAT.30g PAST.ASS.DISS. N 54",
+        "Unit_di_misura__c": "CON",
+        "Quantita__c": "1.0",
+        "Price__c": "64.8",
+        "Discount1__c": "0.0",
+        "Discount2__c": "0.0",
+        "Discount3__c": "0.0",
+        "ValoreRigo__c": "0.0",
+        "Discount4__c": "0.0"
+      }
+    },
+    {
+      "method": "PATCH",
+      "url": "/services/data/v54.0/sobjects/InvoiceLineItem__c/ERPKey__c/2023-F-1001-322269-4000",
+      "referenceId": "refInvoiceItem3",
+      "body": {
+        "Invoice__c": "a023N00000BhrYNQAZ",
+        "Prodotto__c": "01t7Q000005KisFQAS",
+        "TipoRigo__c": "VENDITA",
+        "Description__c": "POCKET TENERI CUCCIOLI LAT.15g ASS.N.36",
+        "Unit_di_misura__c": "CON",
+        "Quantita__c": "1.0",
+        "Price__c": "52.56",
+        "Discount1__c": "0.0",
+        "Discount2__c": "0.0",
+        "Discount3__c": "0.0",
+        "ValoreRigo__c": "0.0",
+        "Discount4__c": "0.0"
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "Name": "1/F",
+  "BilledTo__c": "0013N00001EV1z9QAD",
+  "PaymentMethod__c": "BONIFICO 30 GG F.M.",
+  "ShippedTo__c": "0013N00001EUDDPQA5",
+  "FinancialDiscount__c": "0.0",
+  "Type__c": "Fattura",
+  "Status__c": "Pagata",
+  "InvoiceDate__c": "2023-01-09",
+  "Total_Amount__c": "347.75"
+}
