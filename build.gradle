@@ -21,7 +21,7 @@ repositories {
 
 dependencies {
     providedCompile 'jakarta.platform:jakarta.jakartaee-web-api:10.0.0'
-    implementation 'net.sf.jt400:jt400:20.0.6'
+    implementation name: 'jt400-20.0.6'
     implementation 'org.jboss.logging:jboss-logging:3.5.0.Final'
     // lombok
     compileOnly 'org.projectlombok:lombok:1.18.30'
@@ -65,15 +65,7 @@ ext {
                     wildflyPath: '/opt/wildfly/standalone/deployments',
                     configFile: 'microprofile-config-prod.properties',
                     standaloneXml: 'standalone-microprofile-prod.xml'
-            ],
-            local: [
-                sshHost: '127.0.0.1',
-                sshUser: System.getProperty("user.name"),
-                wildflyPath: 'C:\\wildfly-37.0.0.Final\\standalone\\deployments',
-                configFile: 'microprofile-config-local.properties',
-                standaloneXml: 'standalone-microprofile-local.xml'
             ]
-
     ]
 }
 
@@ -101,19 +93,6 @@ task buildProd(type: War) {
     }
     from('src/main/webapp')
 }
-
-task buildLocal(type: War) {
-    dependsOn classes
-    archiveFileName = "sf.war"
-    from(sourceSets.main.output)
-    from('src/main/resources') {
-        include 'microprofile-config-local.properties'
-        into 'META-INF'
-        rename 'microprofile-config-local.properties', 'microprofile-config.properties'
-    }
-    from('src/main/webapp')
-}
-
 
 // Task per deploy via SSH
 task deployTest {
@@ -153,49 +132,6 @@ task deployProd {
     }
 }
 
-task deployLocal {
-    dependsOn buildLocal
-    doLast {
-        def env = environments.local
-        def warFile = file("${buildDir}/libs/sf.war")
-        def deployDir = file(env.wildflyPath)
-
-        println "=== deployLocal ==="
-        println "WAR      : ${warFile.absolutePath} (exists=${warFile.exists()}, size=${warFile.exists() ? warFile.length() : 0})"
-        println "DeployDir: ${deployDir.absolutePath} (exists=${deployDir.exists()})"
-
-        if (!warFile.exists()) {
-            throw new GradleException("WAR not found: ${warFile.absolutePath}")
-        }
-        if (!deployDir.exists()) {
-            throw new GradleException("WildFly deployments dir not found: ${deployDir.absolutePath}")
-        }
-
-        // cleanup markers from previous deploy attempts
-        ['sf.war.failed','sf.war.deployed','sf.war.undeployed','sf.war.dodeploy'].each { m ->
-            def f = new File(deployDir, m)
-            if (f.exists()) { println "Deleting marker: ${f.name}"; f.delete() }
-        }
-
-        // copy war
-        copy {
-            from warFile
-            into deployDir
-        }
-        println "Copied WAR -> ${new File(deployDir, 'sf.war').absolutePath}"
-
-        // trigger deploy
-        def marker = new File(deployDir, "sf.war.dodeploy")
-        marker.text = ""
-        println "Created marker -> ${marker.absolutePath}"
-
-        // show current markers
-        def markers = deployDir.listFiles().findAll { it.name.startsWith("sf.war.") }*.name
-        println "Current sf.war markers: ${markers}"
-
-        println "Deployed to LOCAL: ${env.wildflyPath}"
-    }
-}
 
 // Task per copiare standalone.xml sul server
 task deployConfigTest {

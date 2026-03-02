@@ -288,17 +288,4 @@ public class APIEndpoint {
                 .build();
         }
     }
-
-
-
-
-    ////////////////////////////////////// prove
-    /// 
-    @GET
-    @Path("/odps")
-    @Tag(name = "JGalileo / AS400")
-    @Operation(summary = "get Odps", description = "list Odps (with pagination)")
-    public Response getOdps(@QueryParam("limit") @DefaultValue("20") int limit) {
-        return Response.ok().entity(as400Service.getOdps(limit)).build();
-    }
 }
