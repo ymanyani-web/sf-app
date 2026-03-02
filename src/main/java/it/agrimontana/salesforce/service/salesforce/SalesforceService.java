@@ -21,8 +21,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import it.agrimontana.salesforce.monitoring.MonitoringDAO;
+import it.agrimontana.salesforce.monitoring.MonitoringContext;
+
+import java.util.UUID;
+
 @ApplicationScoped
 public class SalesforceService {
+
+    @Inject
+    MonitoringDAO monitoringDAO;
 
     private static final Logger logger = Logger.getLogger(SalesforceService.class);
 
@@ -64,20 +72,22 @@ public class SalesforceService {
                     .queryParam("refresh_token", refreshToken);
 
             logger.debug("##SALESFORCE## URL access/bearer token: " + target.getUri());
-            try (Response response = target.request(MediaType.APPLICATION_JSON_TYPE).post(null)) {
+            try (Response response = withSfCall(
+                    "SalesforceService.getAccessToken",
+                    target.getUri().toString(),
+                    "POST",
+                    () -> target.request(MediaType.APPLICATION_JSON_TYPE).post(null))) {
                 if (response.getStatus() != 200) {
                     throw new RuntimeException("Errore Salesforce OAuth: " +
                             response.getStatus() + " - " + response.readEntity(String.class));
                 }
                 Map<?, ?> json = response.readEntity(Map.class);
                 String accessToken = (String) json.get("access_token");
-                logger.debug("AccessToken returnet: " + accessToken);
                 this.token = accessToken;
                 return accessToken;
             }
         }
     }
-
 
     public Response insertProducts(List<SalesforceProduct> products) {
         String accessToken = getAccessToken();
@@ -151,7 +161,9 @@ public class SalesforceService {
                 int status = post.getStatus();
                 String body = post.readEntity(String.class);
                 try {
-                    logger.info("Update Account NEW \n\n" + new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(request) + "\n*********\n\n");
+                    logger.info("Update Account NEW \n\n"
+                            + new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(request)
+                            + "\n*********\n\n");
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -161,7 +173,7 @@ public class SalesforceService {
         }
     }
 
-    public Response compositeInsertPriceBook(PriceBook priceBook,List<PriceBookEntry> entries) {
+    public Response compositeInsertPriceBook(PriceBook priceBook, List<PriceBookEntry> entries) {
         String accessToken = getAccessToken();
 
         List<CompositeSubRequest> requests = new ArrayList<>();
@@ -173,7 +185,8 @@ public class SalesforceService {
         int idx = 1;
         for (PriceBookEntry entry : entries) {
             // Query
-            CompositeSubRequest query = CompositeSubRequest.newQuery("SELECT+Id+FROM+Product2+WHERE+ProductCode='"+entry.getProduct2Id()+"'+LIMIT+1");
+            CompositeSubRequest query = CompositeSubRequest
+                    .newQuery("SELECT+Id+FROM+Product2+WHERE+ProductCode='" + entry.getProduct2Id() + "'+LIMIT+1");
             query.setReferenceId("lookupProduct" + idx);
             requests.add(query);
             CompositeSubRequest sub = CompositeSubRequest.newPriceBookEntry();
@@ -213,38 +226,39 @@ public class SalesforceService {
         }
     }
 
-
     public Response salesforceGet(String sobject) {
-        String url = String.format("%s/services/data/"+ apiVersion +"/sobjects/%s", baseUrl, sobject);
+        String url = String.format("%s/services/data/" + apiVersion + "/sobjects/%s", baseUrl, sobject);
         String accessToken = getAccessToken();
 
         try (Client client = ClientBuilder.newClient()) {
             WebTarget target = client.target(url);
             logger.infof("SALESFORCE REQUEST GET %s", sobject);
-            return target.request(MediaType.APPLICATION_JSON_TYPE)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                    .get();
+            return withSfCall(
+                    "SalesforceService.salesforceGet",
+                    target.getUri().toString(),
+                    "GET",
+                    () -> target.request(MediaType.APPLICATION_JSON_TYPE)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                            .get());
         }
     }
 
-     public Response salesforceQueryGet(String query) {
-         logger.debugf(
-             "Richiesta http invocata per: %s, per funzione: %s, con payload: %b",
-             getClass().getSimpleName(),
-             "executeCompositeGraph",
-             query != null
-         );
+    public Response salesforceQueryGet(String query) {
+        logger.debugf(
+                "Richiesta http invocata per: %s, per funzione: %s, con payload: %b",
+                getClass().getSimpleName(),
+                "executeCompositeGraph",
+                query != null);
 
-        String url = String.format("%s/services/data/"+apiVersion+"/query?q=%s", baseUrl, query);
+        String url = String.format("%s/services/data/" + apiVersion + "/query?q=%s", baseUrl, query);
 
         try (Client client = ClientBuilder.newClient()) {
             WebTarget target = client.target(url);
 
             logger.debugf(
-                "Caratteristiche richiesta url: %s, body: %S",
-                target.getUri(),
-                query
-            );
+                    "Caratteristiche richiesta url: %s, body: %S",
+                    target.getUri(),
+                    query);
 
             Response response = target.request(MediaType.APPLICATION_JSON_TYPE)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + this.token)
@@ -261,36 +275,44 @@ public class SalesforceService {
             }
 
             return Response.status(status)
-                .entity(responseBody)
-                .build();
+                    .entity(responseBody)
+                    .build();
         }
     }
 
     public Response salesforcePost(String sobject, Entity<?> entity) {
-        String url = String.format("%s/services/data/"+apiVersion+"/sobjects/%s", baseUrl, sobject);
+        String url = String.format("%s/services/data/" + apiVersion + "/sobjects/%s", baseUrl, sobject);
         String accessToken = getAccessToken();
         try (Client client = ClientBuilder.newClient()) {
             WebTarget target = client.target(url);
 
             logger.infof("GET SALESFORCE POST: %s", url);
 
-            return target.request(MediaType.APPLICATION_JSON_TYPE)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                    .post(entity);
+            return withSfCall(
+                    "SalesforceService.salesforcePost",
+                    target.getUri().toString(),
+                    "POST",
+                    () -> target.request(MediaType.APPLICATION_JSON_TYPE)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                            .post(entity));
         }
     }
 
     public Response salesforcePatch(String sobject, Entity<?> entity) {
-        String url = String.format("%s/services/data/"+apiVersion+"/sobjects/%s", baseUrl, sobject);
+        String url = String.format("%s/services/data/" + apiVersion + "/sobjects/%s", baseUrl, sobject);
         String accessToken = getAccessToken();
         try (Client client = ClientBuilder.newClient()) {
             WebTarget target = client.target(url);
 
             logger.infof("PATCH %s", url);
 
-            return target.request(MediaType.APPLICATION_JSON_TYPE)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                    .method("PATCH", entity);
+            return withSfCall(
+                    "SalesforceService.salesforcePatch",
+                    target.getUri().toString(),
+                    "PATCH",
+                    () -> target.request(MediaType.APPLICATION_JSON_TYPE)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                            .method("PATCH", entity));
         }
     }
 
@@ -320,14 +342,12 @@ public class SalesforceService {
         }
     }
 
-
     public Response executeCompositeGraph(Object graphPayload) {
         logger.debugf(
-            "Richiesta http invocata per: %s, per funzione: %s, con payload: %b",
-            getClass().getSimpleName(),
-            "executeCompositeGraph",
-            graphPayload != null
-        );
+                "Richiesta http invocata per: %s, per funzione: %s, con payload: %b",
+                getClass().getSimpleName(),
+                "executeCompositeGraph",
+                graphPayload != null);
 
         String url = baseUrl + "/services/data/" + apiVersion + "/composite/graph";
 
@@ -336,36 +356,33 @@ public class SalesforceService {
 
             try {
                 String bodyJson = new ObjectMapper()
-                    .writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(graphPayload);
+                        .writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(graphPayload);
 
                 logger.debugf(
-                    "Caratteristiche richiesta url: %s, body: %S",
-                    target.getUri(),
-                    bodyJson
-                );
+                        "Caratteristiche richiesta url: %s, body: %S",
+                        target.getUri(),
+                        bodyJson);
 
             } catch (Exception e) {
                 logger.errorf(
-                    "Error class: %s, function: %s, error: %s",
-                    SalesforceService.class.getSimpleName(),
-                    "executeCompositeGraph",
-                    e
-                );
+                        "Error class: %s, function: %s, error: %s",
+                        SalesforceService.class.getSimpleName(),
+                        "executeCompositeGraph",
+                        e);
             }
 
             Response response = target.request(MediaType.APPLICATION_JSON_TYPE)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + this.token)
-                .post(Entity.entity(graphPayload, MediaType.APPLICATION_JSON_TYPE));
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + this.token)
+                    .post(Entity.entity(graphPayload, MediaType.APPLICATION_JSON_TYPE));
 
             int status = response.getStatus();
             String responseBody = response.readEntity(String.class);
 
             logger.debugf(
-                "Composite Graph Response status: %d, body: %s",
-                status,
-                responseBody
-            );
+                    "Composite Graph Response status: %d, body: %s",
+                    status,
+                    responseBody);
 
             // token scaduto (401 Unauthorized o INVALID_SESSION_ID)
             if (status == 401 || (responseBody != null && responseBody.contains("INVALID_SESSION_ID"))) {
@@ -375,11 +392,10 @@ public class SalesforceService {
             }
 
             return Response.status(status)
-                .entity(responseBody)
-                .build();
+                    .entity(responseBody)
+                    .build();
         }
     }
-
 
     public String getApiVersion() {
         return apiVersion;
@@ -389,4 +405,59 @@ public class SalesforceService {
         return baseUrl;
     }
 
+    @FunctionalInterface
+    private interface HttpWork {
+        Response run() throws Exception;
+    }
+
+    private Response withSfCall(String operation, String target, String httpMethod, HttpWork work) {
+        UUID reqId = MonitoringContext.requestId();
+        String corr = MonitoringContext.correlationId();
+
+        long callId = -1;
+        try {
+            callId = monitoringDAO.startExternalCall(
+                    reqId,
+                    corr,
+                    "SALESFORCE",
+                    operation,
+                    target,
+                    httpMethod,
+                    null);
+
+            Response resp = work.run();
+
+            // IMPORTANT: don't readEntity() here, because your code reads body later.
+            // Just log status and mark success based on HTTP code.
+            int status = resp != null ? resp.getStatus() : 0;
+            boolean ok = status >= 200 && status < 400;
+
+            monitoringDAO.finishExternalCall(
+                    callId,
+                    status,
+                    ok,
+                    null,
+                    null,
+                    null,
+                    null);
+
+            return resp;
+
+        } catch (Exception e) {
+            try {
+                if (callId != -1) {
+                    monitoringDAO.finishExternalCall(
+                            callId,
+                            null,
+                            false,
+                            null,
+                            null,
+                            e,
+                            null);
+                }
+            } catch (Exception ignore) {
+            }
+            throw (e instanceof RuntimeException) ? (RuntimeException) e : new RuntimeException(e);
+        }
+    }
 }
